@@ -13,7 +13,7 @@ from rest_framework import serializers
 from rest_framework import fields as drf_fields
 from rest_framework_mongoengine.utils import get_field_info
 from rest_framework_mongoengine.fields import (ReferenceField, ListField, EmbeddedDocumentField, DynamicField,
-                                               ObjectIdField, DocumentField, BinaryField, BaseGeoField)
+                                               ObjectIdField, DocumentField)
 import copy
 
 
@@ -125,6 +125,7 @@ class DocumentSerializer(serializers.ModelSerializer):
             raise AssertionError('You should set `model` attribute on %s.' % type(self).__name__)
 
     MAX_RECURSION_DEPTH = 5  # default value of depth
+
     field_mapping = {
         me_fields.FloatField: drf_fields.FloatField,
         me_fields.IntField: drf_fields.IntegerField,
@@ -135,25 +136,15 @@ class DocumentSerializer(serializers.ModelSerializer):
         me_fields.BooleanField: drf_fields.BooleanField,
         me_fields.FileField: drf_fields.FileField,
         me_fields.ImageField: drf_fields.ImageField,
-        me_fields.UUIDField: drf_fields.CharField,
-        me_fields.DecimalField: drf_fields.DecimalField
-    }
-
-    _drfme_field_mapping = {
         me_fields.ObjectIdField: ObjectIdField,
         me_fields.ReferenceField: ReferenceField,
         me_fields.ListField: ListField,
         me_fields.EmbeddedDocumentField: EmbeddedDocumentField,
         me_fields.DynamicField: DynamicField,
-        me_fields.DictField: DocumentField,
-        me_fields.BinaryField: BinaryField,
-        me_fields.GeoPointField: BaseGeoField,
-        me_fields.PointField: BaseGeoField,
-        me_fields.PolygonField: BaseGeoField,
-        me_fields.LineStringField: BaseGeoField,
+        me_fields.DecimalField: drf_fields.DecimalField,
+        me_fields.UUIDField: drf_fields.CharField,
+        me_fields.DictField: DocumentField
     }
-
-    field_mapping.update(_drfme_field_mapping)
 
     embedded_document_serializer_fields = []
 
@@ -168,7 +159,7 @@ class DocumentSerializer(serializers.ModelSerializer):
         valid = super(DocumentSerializer, self).is_valid(raise_exception=raise_exception)
 
         for embedded_field in self.embedded_document_serializer_fields:
-            embedded_field.initial_data = self.validated_data.pop(embedded_field.field_name, serializers.empty)
+            embedded_field._initial_data = self.validated_data.pop(embedded_field.field_name, serializers.empty)
             valid &= embedded_field.is_valid(raise_exception=raise_exception)
 
         return valid
@@ -323,10 +314,9 @@ class DocumentSerializer(serializers.ModelSerializer):
         """
         kwargs = {}
 
-        if type(model_field) in self._drfme_field_mapping:
+        if type(model_field) in (me_fields.ReferenceField, me_fields.EmbeddedDocumentField,
+                                 me_fields.ListField, me_fields.DynamicField, me_fields.DictField):
             kwargs['model_field'] = model_field
-
-        if type(model_field) in (me_fields.ReferenceField, me_fields.ListField):
             kwargs['depth'] = getattr(self.Meta, 'depth', self.MAX_RECURSION_DEPTH)
 
         if type(model_field) is me_fields.ObjectIdField:
@@ -350,7 +340,6 @@ class DocumentSerializer(serializers.ModelSerializer):
             me_fields.EmailField: ['max_length'],
             me_fields.FileField: ['max_length'],
             me_fields.URLField: ['max_length'],
-            me_fields.BinaryField: ['max_bytes']
         }
 
         if model_field.__class__ in attribute_dict:
@@ -374,8 +363,7 @@ class DocumentSerializer(serializers.ModelSerializer):
 
         ModelClass = self.Meta.model
         try:
-            instance = ModelClass(**validated_data)
-            instance.save()
+            instance = ModelClass.objects.create(**validated_data)
         except TypeError as exc:
             msg = (
                 'Got a `TypeError` when calling `%s.objects.create()`. '
@@ -446,11 +434,7 @@ class DynamicDocumentSerializer(DocumentSerializer):
         fields += self._get_dynamic_fields(instance).values()
 
         for field in fields:
-            try:
-                attribute = field.get_attribute(instance)
-            except serializers.SkipField:
-                continue
-
+            attribute = field.get_attribute(instance)
             if attribute is None:
                 ret[field.field_name] = None
             else:
