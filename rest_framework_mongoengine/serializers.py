@@ -190,6 +190,22 @@ class DocumentSerializer(serializers.ModelSerializer):
         depth = getattr(self.Meta, 'depth', 0)
         extra_kwargs = getattr(self.Meta, 'extra_kwargs', {})
 
+
+        read_only_fields = getattr(self.Meta, 'read_only_fields', None)
+        if read_only_fields is not None:
+            for field_name in read_only_fields:
+                kwargs = extra_kwargs.get(field_name, {})
+                kwargs['read_only'] = True
+                extra_kwargs[field_name] = kwargs
+
+        write_only_fields = getattr(self.Meta, 'write_only_fields', None)
+        if write_only_fields is not None:
+            for field_name in write_only_fields:
+                kwargs = extra_kwargs.get(field_name, {})
+                kwargs['write_only'] = True
+                extra_kwargs[field_name] = kwargs
+
+
         if fields and not isinstance(fields, (list, tuple)):
             raise TypeError(
                 'The `fields` option must be a list or tuple. Got %s.' %
