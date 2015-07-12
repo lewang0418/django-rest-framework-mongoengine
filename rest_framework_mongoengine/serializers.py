@@ -364,7 +364,7 @@ class DocumentSerializer(serializers.ModelSerializer):
             me_fields.StringField: ['max_length'],
             me_fields.DecimalField: ['min_value', 'max_value'],
             me_fields.EmailField: ['max_length'],
-            me_fields.FileField: ['max_length'],
+            #me_fields.FileField: ['max_length'],
             me_fields.URLField: ['max_length'],
             me_fields.BinaryField: ['max_bytes']
         }
